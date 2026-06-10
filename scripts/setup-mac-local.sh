@@ -7,6 +7,7 @@ cd "$ROOT"
 ENV_FILE="$ROOT/.env.mac-local"
 COMPOSE_FILE="docker-compose.mac-local.yaml"
 WEBUI_URL="${WEBUI_URL:-http://localhost:3000}"
+OLLAMA_URL="${OLLAMA_URL:-http://host.docker.internal:11434}"
 
 if [[ -f "$ENV_FILE" ]]; then
   # shellcheck disable=SC1090
@@ -27,7 +28,7 @@ if [[ -z "$ADMIN_PASSWORD" ]]; then
   chmod 600 "$ENV_FILE"
 fi
 
-echo "Starting Open WebUI (Mac local)..."
+echo "Starting Open WebUI (Mac local + host Ollama)..."
 docker compose -f "$COMPOSE_FILE" up -d
 
 echo "Waiting for Open WebUI..."
@@ -43,8 +44,8 @@ if ! curl -fsS "$WEBUI_URL/health" >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "Verifying llama.cpp from inside the container..."
-docker exec open-webui curl -fsS http://host.docker.internal:8080/v1/models >/dev/null
+echo "Verifying Ollama from inside the container..."
+docker exec open-webui curl -fsS "$OLLAMA_URL/api/tags" >/dev/null
 
 get_token() {
   curl -fsS "$WEBUI_URL/api/v1/auths/signin" \
@@ -66,21 +67,27 @@ else
   )"
 fi
 
-echo "Configuring llama.cpp connection..."
+echo "Configuring Ollama connection..."
+curl -fsS "$WEBUI_URL/ollama/config/update" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d "{
+    \"ENABLE_OLLAMA_API\": true,
+    \"OLLAMA_BASE_URLS\": [\"$OLLAMA_URL\"],
+    \"OLLAMA_API_CONFIGS\": {
+      \"0\": { \"enable\": true }
+    }
+  }" >/dev/null
+
+echo "Disabling llama.cpp OpenAI connection..."
 curl -fsS "$WEBUI_URL/openai/config/update" \
   -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{
-    "ENABLE_OPENAI_API": true,
-    "OPENAI_API_BASE_URLS": ["http://host.docker.internal:8080/v1"],
-    "OPENAI_API_KEYS": [""],
-    "OPENAI_API_CONFIGS": {
-      "0": {
-        "enable": true,
-        "provider": "llama.cpp",
-        "auth_type": "bearer"
-      }
-    }
+    "ENABLE_OPENAI_API": false,
+    "OPENAI_API_BASE_URLS": [],
+    "OPENAI_API_KEYS": [],
+    "OPENAI_API_CONFIGS": {}
   }' >/dev/null
 
 MODELS="$(curl -fsS "$WEBUI_URL/api/v1/models" -H "Authorization: Bearer $TOKEN" | python3 -c '
@@ -94,6 +101,7 @@ for m in data.get("data", []):
 echo ""
 echo "Done."
 echo "  Web UI:  $WEBUI_URL"
+echo "  Ollama:  $OLLAMA_URL"
 echo "  Email:   $ADMIN_EMAIL"
 echo "  Password stored in: $ENV_FILE"
 echo ""

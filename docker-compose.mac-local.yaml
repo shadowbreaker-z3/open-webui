@@ -1,4 +1,4 @@
-# Mac local: Open WebUI in Docker + llama.cpp / Ollama on the host.
+# Mac local: Open WebUI in Docker + Ollama on the host.
 # Usage: docker compose -f docker-compose.mac-local.yaml up -d
 
 services:
@@ -10,11 +10,9 @@ services:
     ports:
       - ${OPEN_WEBUI_PORT-3000}:8080
     environment:
-      # ใช้ llama-server บน Mac host เท่านั้น — ไม่โหลดโมเดลใหม่ใน Docker
-      - ENABLE_OLLAMA_API=false
-      - OPENAI_API_BASE_URLS=http://host.docker.internal:8080/v1
-      - OPENAI_API_KEYS=
-      - ENABLE_OPENAI_API=true
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - ENABLE_OLLAMA_API=true
+      - ENABLE_OPENAI_API=false
       - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:-}
     extra_hosts:
       - host.docker.internal:host-gateway
