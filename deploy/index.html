@@ -1,4 +1,8 @@
 <!doctype html>
+<!-- DEPRECATED: Do not COPY this file over /app/build/index.html in Docker.
+     SvelteKit bundle hashes in this file go stale when the base image updates,
+     causing the app to hang on the splash screen after login. Use Dockerfile.deploy
+     script injection instead. -->
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
@@ -33,6 +37,7 @@
 
 		<script src="/static/loader.js" defer crossorigin="use-credentials"></script>
 		<script src="/static/hide-model-for-users.js" defer crossorigin="use-credentials"></script>
+		<script src="/static/auth-ldap-fix.js" defer crossorigin="use-credentials"></script>
 		<link rel="stylesheet" href="/static/custom.css" crossorigin="use-credentials" />
 
 		<script>

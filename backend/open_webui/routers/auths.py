@@ -645,6 +645,12 @@ async def signin(
                 db=db,
             )
     else:
+        if not request.app.state.config.ENABLE_LOGIN_FORM:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=ERROR_MESSAGES.ACTION_PROHIBITED,
+            )
+
         if signin_rate_limiter.is_limited(form_data.email.lower()):
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,

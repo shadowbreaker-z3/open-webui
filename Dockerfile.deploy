@@ -1,0 +1,14 @@
+FROM ghcr.io/open-webui/open-webui:main
+
+COPY deploy/auth-ldap-fix.js /app/build/static/auth-ldap-fix.js
+COPY deploy/hide-model-for-users.js /app/build/static/hide-model-for-users.js
+COPY deploy/custom.css /app/build/static/custom.css
+COPY backend/open_webui/routers/auths.py /app/backend/open_webui/routers/auths.py
+
+# Do NOT replace index.html — it contains SvelteKit bundle hashes that must match
+# this image. Only inject our custom static assets into the built index.html.
+RUN set -eux; \
+	INDEX=/app/build/index.html; \
+	if ! grep -q 'auth-ldap-fix.js' "$INDEX"; then \
+		sed -i 's|</head>|\t\t<script src="/static/hide-model-for-users.js" defer crossorigin="use-credentials"></script>\n\t\t<script src="/static/auth-ldap-fix.js" defer crossorigin="use-credentials"></script>\n\t\t<link rel="stylesheet" href="/static/custom.css" crossorigin="use-credentials" />\n\t</head>|' "$INDEX"; \
+	fi

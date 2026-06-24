@@ -31,7 +31,15 @@
 
 	let loaded = false;
 
-	let mode = $config?.features.enable_ldap ? 'ldap' : 'signin';
+	let mode = 'signin';
+
+	$: if (
+		$config?.features?.enable_ldap &&
+		!$config?.features?.enable_login_form &&
+		!($config?.onboarding ?? false)
+	) {
+		mode = 'ldap';
+	}
 
 	let form = null;
 
