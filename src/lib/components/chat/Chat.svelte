@@ -3027,6 +3027,7 @@
 					<FilesOverlay show={dragged} />
 					<Navbar
 						bind:this={navbarElement}
+						showModelSelector={$user?.role === 'admin'}
 						chat={{
 							id: $chatId,
 							chat: {
