@@ -5,9 +5,33 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 ENV_FILE="$ROOT/.env.mac-local"
+PROJECT_ENV="$ROOT/.env"
 COMPOSE_FILE="docker-compose.mac-local.yaml"
-WEBUI_URL="${WEBUI_URL:-http://localhost:3000}"
-OLLAMA_URL="${OLLAMA_URL:-http://host.docker.internal:11434}"
+
+read_env_var() {
+  local key="$1"
+  local file="$2"
+  local line value
+  line="$(grep -E "^${key}=" "$file" | tail -n 1 || true)"
+  value="${line#*=}"
+  value="${value%\"}"
+  value="${value#\"}"
+  value="${value%\'}"
+  value="${value#\'}"
+  printf '%s' "$value"
+}
+
+if [[ -f "$PROJECT_ENV" ]]; then
+  OPEN_WEBUI_PORT="${OPEN_WEBUI_PORT:-$(read_env_var OPEN_WEBUI_PORT "$PROJECT_ENV")}"
+  OPENAI_API_BASE_URLS="${OPENAI_API_BASE_URLS:-$(read_env_var OPENAI_API_BASE_URLS "$PROJECT_ENV")}"
+  OPENAI_API_KEYS="${OPENAI_API_KEYS:-$(read_env_var OPENAI_API_KEYS "$PROJECT_ENV")}"
+  DEFAULT_MODELS="${DEFAULT_MODELS:-$(read_env_var DEFAULT_MODELS "$PROJECT_ENV")}"
+fi
+
+WEBUI_URL="${WEBUI_URL:-http://localhost:${OPEN_WEBUI_PORT:-3000}}"
+THAILLM_URL="${OPENAI_API_BASE_URLS:-http://thaillm.or.th/api/v1}"
+THAILLM_KEY="${OPENAI_API_KEYS:-}"
+DEFAULT_MODEL="${DEFAULT_MODELS:-typhoon-s-thaillm-8b-instruct}"
 
 if [[ -f "$ENV_FILE" ]]; then
   # shellcheck disable=SC1090
@@ -28,7 +52,12 @@ if [[ -z "$ADMIN_PASSWORD" ]]; then
   chmod 600 "$ENV_FILE"
 fi
 
-echo "Starting Open WebUI (Mac local + host Ollama)..."
+if [[ -z "$THAILLM_KEY" ]]; then
+  echo "Missing OPENAI_API_KEYS in .env"
+  exit 1
+fi
+
+echo "Starting Open WebUI (Mac local + ThaiLLM)..."
 docker compose -f "$COMPOSE_FILE" up -d
 
 echo "Waiting for Open WebUI..."
@@ -44,8 +73,9 @@ if ! curl -fsS "$WEBUI_URL/health" >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "Verifying Ollama from inside the container..."
-docker exec open-webui curl -fsS "$OLLAMA_URL/api/tags" >/dev/null
+echo "Verifying ThaiLLM API..."
+curl -fsS "$THAILLM_URL/models" \
+  -H "Authorization: Bearer $THAILLM_KEY" >/dev/null
 
 get_token() {
   curl -fsS "$WEBUI_URL/api/v1/auths/signin" \
@@ -67,27 +97,31 @@ else
   )"
 fi
 
-echo "Configuring Ollama connection..."
-curl -fsS "$WEBUI_URL/ollama/config/update" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d "{
-    \"ENABLE_OLLAMA_API\": true,
-    \"OLLAMA_BASE_URLS\": [\"$OLLAMA_URL\"],
-    \"OLLAMA_API_CONFIGS\": {
-      \"0\": { \"enable\": true }
-    }
-  }" >/dev/null
-
-echo "Disabling llama.cpp OpenAI connection..."
+echo "Configuring ThaiLLM connection..."
 curl -fsS "$WEBUI_URL/openai/config/update" \
   -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
+  -d "{
+    \"ENABLE_OPENAI_API\": true,
+    \"OPENAI_API_BASE_URLS\": [\"$THAILLM_URL\"],
+    \"OPENAI_API_KEYS\": [\"$THAILLM_KEY\"],
+    \"OPENAI_API_CONFIGS\": {
+      \"0\": {
+        \"enable\": true,
+        \"auth_type\": \"bearer\",
+        \"model_ids\": [\"$DEFAULT_MODEL\"]
+      }
+    }
+  }" >/dev/null
+
+echo "Disabling Ollama..."
+curl -fsS "$WEBUI_URL/ollama/config/update" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
   -d '{
-    "ENABLE_OPENAI_API": false,
-    "OPENAI_API_BASE_URLS": [],
-    "OPENAI_API_KEYS": [],
-    "OPENAI_API_CONFIGS": {}
+    "ENABLE_OLLAMA_API": false,
+    "OLLAMA_BASE_URLS": [],
+    "OLLAMA_API_CONFIGS": {}
   }' >/dev/null
 
 MODELS="$(curl -fsS "$WEBUI_URL/api/v1/models" -H "Authorization: Bearer $TOKEN" | python3 -c '
@@ -101,7 +135,8 @@ for m in data.get("data", []):
 echo ""
 echo "Done."
 echo "  Web UI:  $WEBUI_URL"
-echo "  Ollama:  $OLLAMA_URL"
+echo "  API:     $THAILLM_URL"
+echo "  Model:   $DEFAULT_MODEL"
 echo "  Email:   $ADMIN_EMAIL"
 echo "  Password stored in: $ENV_FILE"
 echo ""
