@@ -12,6 +12,10 @@ services:
       - .env
     volumes:
       - open-webui:/app/backend/data
+      # Keep custom static assets even if image is stale or not rebuilt
+      - ./deploy/auth-ldap-fix.js:/app/build/static/auth-ldap-fix.js:ro
+      - ./deploy/hide-model-for-users.js:/app/build/static/hide-model-for-users.js:ro
+      - ./deploy/custom.css:/app/build/static/custom.css:ro
     ports:
       - ${OPEN_WEBUI_PORT-3303}:8080
     environment:

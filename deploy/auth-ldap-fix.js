@@ -11,7 +11,10 @@
 	}
 
 	function ldapOnly(cfg) {
-		return cfg?.features?.enable_ldap && !cfg?.features?.enable_login_form;
+		if (cfg?.features?.enable_ldap && !cfg?.features?.enable_login_form) return true;
+		// Tolerate backend env drift: this script ships only on LDAP-only deploys.
+		if (cfg?.features?.enable_login_form && !cfg?.features?.enable_signup) return true;
+		return false;
 	}
 
 	function isDark() {
